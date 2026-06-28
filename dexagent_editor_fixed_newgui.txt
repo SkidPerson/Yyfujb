@@ -387,14 +387,6 @@ local function main()
             end
         end
 
-        local SimpleHash = function(tbl)
-            local str = ""
-            for k, v in pairs(tbl) do
-                str = str .. tostring(k) .. tostring(v)
-            end
-            return tostring(str):sub(1, 32)
-        end
-
         -- Toggle expand/collapse
         PlayerData.MouseButton1Down:Connect(function()
             setEntryColor(PlayerData)
@@ -409,14 +401,41 @@ local function main()
             end
         end)
 
+        -- Rebuild da lista de entries
+        local function rebuildEntries()
+            for _, frames in pairs(PlayersFrame:GetDescendants()) do
+                if frames.Name == "EntryFrameData" then frames:Destroy() end
+            end
+            for _, plrName in pairs(ListedPlayers) do
+                local new = PlaceHolderEntry:Clone()
+                new.Name                  = "EntryFrameData"
+                new.Visible               = true
+                new.Parent                = PlayersFrame
+                new.Indent.EntryName.Text = plrName
+                new.MouseButton1Down:Connect(function()
+                    if new:IsA("TextButton") and new:FindFirstChild("Indent") then
+                        if new.Indent.BackgroundColor3 == selectionColor then
+                            local target = Players:FindFirstChild(plrName)
+                            if target then DisplayValueEditor(target) end
+                        end
+                    end
+                    setEntryColor(new)
+                end)
+            end
+        end
+
         -- Tracking de players
         Players.PlayerRemoving:Connect(function(plr)
             local idx = table.find(ListedPlayers, plr.Name)
-            if idx then table.remove(ListedPlayers, idx) end
+            if idx then
+                table.remove(ListedPlayers, idx)
+                rebuildEntries()
+            end
         end)
         Players.PlayerAdded:Connect(function(plr)
             if not table.find(ListedPlayers, plr.Name) then
                 table.insert(ListedPlayers, plr.Name)
+                rebuildEntries()
             end
         end)
         for _, plr in pairs(Players:GetPlayers()) do
@@ -425,36 +444,8 @@ local function main()
             end
         end
 
-        local hash = SimpleHash(ListedPlayers)
-
-        game:GetService("RunService").Heartbeat:Connect(function()
-            if SimpleHash(ListedPlayers) == hash then return end
-            hash = SimpleHash(ListedPlayers)
-
-            for _, frames in pairs(PlayersFrame:GetDescendants()) do
-                if frames.Name == "EntryFrameData" then frames:Destroy() end
-            end
-
-            for _, plrName in pairs(ListedPlayers) do
-                local new = PlaceHolderEntry:Clone()
-                new.Name                    = "EntryFrameData"
-                new.Visible                 = true
-                new.Parent                  = PlayersFrame
-                new.Indent.EntryName.Text   = plrName
-
-                new.MouseButton1Down:Connect(function()
-                    if new:IsA("TextButton") and new:FindFirstChild("Indent") then
-                        if new.Indent.BackgroundColor3 == selectionColor then
-                            local target = Players:FindFirstChild(plrName)
-                            if target then
-                                DisplayValueEditor(target)
-                            end
-                        end
-                    end
-                    setEntryColor(new)
-                end)
-            end
-        end)
+        -- Popula imediatamente na abertura
+        rebuildEntries()
     end
 
     return Editor
