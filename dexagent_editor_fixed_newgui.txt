@@ -283,8 +283,6 @@ local function main()
         Expand.Font               = Enum.Font.SourceSans
         Expand.Text               = ""
         Expand.TextSize           = 14
-        Expand.Rotation           = 90
-
         Icon.Name               = "Icon"
         Icon.Parent             = Expand
         Icon.BackgroundColor3   = Color3.fromRGB(255, 255, 255)
@@ -312,7 +310,7 @@ local function main()
         PlayersFrame.BorderSizePixel    = 0
         PlayersFrame.Position           = UDim2.new(0, 0, 0.0416795851, 0)
         PlayersFrame.Size               = UDim2.new(0, 205, 0, 367)
-        PlayersFrame.Visible            = true
+        PlayersFrame.Visible            = false
 
         UIListLayout.Parent    = PlayersFrame
         UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
