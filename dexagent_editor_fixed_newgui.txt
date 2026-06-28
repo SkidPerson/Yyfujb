@@ -372,10 +372,8 @@ local function main()
         local Players       = game:GetService("Players")
         local ListedPlayers = {}
 
-        -- Referencia filhos pelo nome, igual ao original
-        local PlayersFrame     = List:FindFirstChild("Players")
-        local PlaceHolderEntry = List:FindFirstChild("PlaceHolderEntry")
-        local PlayerDataButton = List:FindFirstChild("PlayerData")
+        -- Referencia os elementos já criados acima
+        local PlayerDataButton = PlayerData
 
         local SimpleHash = function(tbl)
             local str = ""
