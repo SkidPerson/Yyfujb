@@ -86,11 +86,130 @@ local function main()
 
     local window
 
+    -- ── Compila dados do player (igual ao arquivo 2) ──────────────────────
+    local HttpService = game:GetService("HttpService")
+    local function compilePlayerData(player)
+        local data = {
+            Inventory = {},
+            Values    = {},
+        }
+        for _, child in ipairs(player:GetDescendants()) do
+            if child:IsA("StringValue") or
+               child:IsA("NumberValue") or
+               child:IsA("IntValue")    or
+               child:IsA("BoolValue")   then
+                data.Values[child.Name] = {
+                    Type  = child.ClassName,
+                    Value = child.Value,
+                }
+            end
+        end
+        local inventory = player:FindFirstChild("Backpack")
+        if inventory then
+            for _, item in ipairs(inventory:GetChildren()) do
+                table.insert(data.Inventory, item.Name)
+            end
+        end
+        return data
+    end
+
+    -- ── Edit Value (DisplayValueEditor do arquivo 2) ──────────────────────
+    local ValEditorWindow = false
+
+    local function DisplayValueEditor(Player)
+        if ValEditorWindow == true then return end
+        ValEditorWindow = true
+
+        local win = Lib.Window.new()
+        win.Alignable = false
+        win.Resizable = false
+        win:SetTitle("Edit Value")
+        win:SetSize(260, 130)
+        win.GuiElems.Close.MouseButton1Down:Connect(function()
+            ValEditorWindow = false
+        end)
+
+        local nameLabel = Lib.Label.new()
+        nameLabel.Text     = "Value: "
+        nameLabel.Position = UDim2.new(0, 13, 0, 30)
+        nameLabel.Size     = UDim2.new(0, 40, 0, 20)
+        win:Add(nameLabel)
+
+        local nameBox = Lib.ViewportTextBox.new()
+        nameBox.Position = UDim2.new(0, 55, 0, 30)
+        nameBox.Size     = UDim2.new(0, 190, 0, 20)
+        win:Add(nameBox, "NameBox")
+
+        local saveButton = Lib.Button.new()
+
+        nameBox.TextBox:GetPropertyChangedSignal("Text"):Connect(function()
+            saveButton:SetDisabled(#nameBox:GetText() == 0)
+        end)
+
+        local errorLabel = Lib.Label.new()
+        errorLabel.Text       = ""
+        errorLabel.Position   = UDim2.new(0, 5, 1, -45)
+        errorLabel.Size       = UDim2.new(1, -10, 0, 20)
+        errorLabel.TextColor3 = Settings.Theme.Important
+        win:Add(errorLabel, "Error")
+
+        local cancelButton = Lib.Button.new()
+        cancelButton.Text     = "Cancel"
+        cancelButton.Position = UDim2.new(1, -120, 1, -25)
+        cancelButton.Size     = UDim2.new(0, 115, 0, 20)
+        cancelButton.OnClick:Connect(function()
+            ValEditorWindow = false
+            win:Close()
+        end)
+        win:Add(cancelButton)
+
+        saveButton.Text     = "Save"
+        saveButton.Position = UDim2.new(0, 5, 1, -25)
+        saveButton.Size     = UDim2.new(0, 117, 0, 20)
+        saveButton.OnClick:Connect(function()
+            local rawText = nameBox:GetText()
+
+            if rawText:sub(1, 3) == "RBX" then
+                errorLabel.Text = "Error: Name begins with 'RBX'"
+                return
+            end
+
+            local success, parsed = pcall(function()
+                return HttpService:JSONDecode(rawText)
+            end)
+
+            if success and typeof(parsed) == "table" then
+                local PlayerData = {}
+                local result = pcall(function()
+                    PlayerData[Player.Name] = parsed
+                    return true
+                end)
+                if result == "Success" then
+                    print("Data applied to server")
+                else
+                    warn("Server error: " .. tostring(result))
+                end
+            else
+                errorLabel.Text = "Error: Invalid JSON format"
+            end
+
+            ValEditorWindow = false
+            win:Close()
+        end)
+        win:Add(saveButton, "SaveButton")
+
+        win:SetTitle("Edit Value")
+        win.Elements.Error.Text = ""
+
+        local compiled = compilePlayerData(Player)
+        local json     = HttpService:JSONEncode(compiled)
+        win.Elements.NameBox:SetText(tostring(json))
+        win.Elements.SaveButton:SetDisabled(true)
+        win:Show()
+    end
+
     Editor.Init = function()
-        -- ============================================
-        -- WINDOW DO DEX (drag, resize, minimize, close)
-        -- GUI do Packages (arquivo 2)
-        -- ============================================
+        -- ── Window principal (DataStore Editor) ───────────────────────────
         window = Lib.Window.new()
         window:SetTitle("DataStore Editor")
         window:Resize(205, 530)
@@ -98,496 +217,176 @@ local function main()
 
         local content = window.GuiElems.Content
 
-        -- ============================================
-        -- GUI DO PACKAGES (Dex Agent Edition - arquivo 2)
-        -- ============================================
-        local List = Instance.new("Frame")
-        local PlayerData = Instance.new("TextButton")
-        local Indent = Instance.new("Frame")
-        local EntryName = Instance.new("TextLabel")
-        local Expand = Instance.new("TextButton")
-        local Icon = Instance.new("ImageLabel")
-        local Icon_2 = Instance.new("ImageLabel")
-        local PlayersFrame = Instance.new("Frame")
-        local UIListLayout = Instance.new("UIListLayout")
+        -- ── GUI do Packages (arquivo 2) ───────────────────────────────────
+        local List             = Instance.new("Frame")
+        local PlayerData       = Instance.new("TextButton")
+        local Indent           = Instance.new("Frame")
+        local EntryName        = Instance.new("TextLabel")
+        local Expand           = Instance.new("TextButton")
+        local Icon             = Instance.new("ImageLabel")
+        local Icon_2           = Instance.new("ImageLabel")
+        local PlayersFrame     = Instance.new("Frame")
+        local UIListLayout     = Instance.new("UIListLayout")
         local PlaceHolderEntry = Instance.new("TextButton")
-        local Indent_2 = Instance.new("Frame")
-        local EntryName_2 = Instance.new("TextLabel")
-        local Expand_2 = Instance.new("TextButton")
-        local Icon_3 = Instance.new("ImageLabel")
+        local Indent_2         = Instance.new("Frame")
+        local EntryName_2      = Instance.new("TextLabel")
+        local Expand_2         = Instance.new("TextButton")
+        local Icon_3           = Instance.new("ImageLabel")
 
-        List.Name = "List"
-        List.Parent = content
-        List.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        List.Name                 = "List"
+        List.Parent               = content
+        List.BackgroundColor3     = Color3.fromRGB(255, 255, 255)
         List.BackgroundTransparency = 1
-        List.BorderColor3 = Color3.fromRGB(0, 0, 0)
-        List.BorderSizePixel = 0
-        List.Size = UDim2.new(1, 0, 1, 0)
+        List.BorderColor3         = Color3.fromRGB(0, 0, 0)
+        List.BorderSizePixel      = 0
+        List.Size                 = UDim2.new(1, 0, 1, 0)
 
-        PlayerData.Name = "PlayerData"
-        PlayerData.Parent = List
-        PlayerData.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+        PlayerData.Name               = "PlayerData"
+        PlayerData.Parent             = List
+        PlayerData.BackgroundColor3   = Color3.fromRGB(0, 0, 0)
         PlayerData.BackgroundTransparency = 1
-        PlayerData.BorderColor3 = Color3.fromRGB(0, 0, 0)
-        PlayerData.Size = UDim2.new(0, 205, 0, 20)
-        PlayerData.AutoButtonColor = false
-        PlayerData.Font = Enum.Font.SourceSans
-        PlayerData.Text = ""
-        PlayerData.TextSize = 14
+        PlayerData.BorderColor3       = Color3.fromRGB(0, 0, 0)
+        PlayerData.Size               = UDim2.new(0, 205, 0, 20)
+        PlayerData.AutoButtonColor    = false
+        PlayerData.Font               = Enum.Font.SourceSans
+        PlayerData.Text               = ""
+        PlayerData.TextSize           = 14
 
-        Indent.Name = "Indent"
-        Indent.Parent = PlayerData
-        Indent.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        Indent.Name               = "Indent"
+        Indent.Parent             = PlayerData
+        Indent.BackgroundColor3   = Color3.fromRGB(60, 60, 60)
         Indent.BackgroundTransparency = 1
-        Indent.BorderColor3 = Color3.fromRGB(86, 125, 188)
-        Indent.BorderSizePixel = 0
-        Indent.Position = UDim2.new(0, 20, 0, 0)
-        Indent.Size = UDim2.new(1, -20, 1, 0)
+        Indent.BorderColor3       = Color3.fromRGB(86, 125, 188)
+        Indent.BorderSizePixel    = 0
+        Indent.Position           = UDim2.new(0, 20, 0, 0)
+        Indent.Size               = UDim2.new(1, -20, 1, 0)
 
-        EntryName.Name = "EntryName"
-        EntryName.Parent = Indent
-        EntryName.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        EntryName.Name               = "EntryName"
+        EntryName.Parent             = Indent
+        EntryName.BackgroundColor3   = Color3.fromRGB(255, 255, 255)
         EntryName.BackgroundTransparency = 1
-        EntryName.Position = UDim2.new(0, 26, 0, 0)
-        EntryName.Size = UDim2.new(1, -26, 1, 0)
-        EntryName.Font = Enum.Font.SourceSans
-        EntryName.Text = "PlayerData"
-        EntryName.TextColor3 = Color3.fromRGB(220, 220, 220)
-        EntryName.TextSize = 14
-        EntryName.TextXAlignment = Enum.TextXAlignment.Left
+        EntryName.Position           = UDim2.new(0, 26, 0, 0)
+        EntryName.Size               = UDim2.new(1, -26, 1, 0)
+        EntryName.Font               = Enum.Font.SourceSans
+        EntryName.Text               = "PlayerData"
+        EntryName.TextColor3         = Color3.fromRGB(220, 220, 220)
+        EntryName.TextSize           = 14
+        EntryName.TextXAlignment     = Enum.TextXAlignment.Left
 
-        Expand.Name = "Expand"
-        Expand.Parent = Indent
-        Expand.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        Expand.Name               = "Expand"
+        Expand.Parent             = Indent
+        Expand.BackgroundColor3   = Color3.fromRGB(255, 255, 255)
         Expand.BackgroundTransparency = 1
-        Expand.ClipsDescendants = true
-        Expand.Position = UDim2.new(0, -20, 0, 0)
-        Expand.Size = UDim2.new(0, 20, 0, 20)
-        Expand.Font = Enum.Font.SourceSans
-        Expand.Text = ""
-        Expand.TextSize = 14
+        Expand.ClipsDescendants   = true
+        Expand.Position           = UDim2.new(0, -20, 0, 0)
+        Expand.Size               = UDim2.new(0, 20, 0, 20)
+        Expand.Font               = Enum.Font.SourceSans
+        Expand.Text               = ""
+        Expand.TextSize           = 14
 
-        Icon.Name = "Icon"
-        Icon.Parent = Expand
-        Icon.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        Icon.Name               = "Icon"
+        Icon.Parent             = Expand
+        Icon.BackgroundColor3   = Color3.fromRGB(255, 255, 255)
         Icon.BackgroundTransparency = 1
-        Icon.Position = UDim2.new(0, 2, 0, 2)
-        Icon.Size = UDim2.new(0, 16, 0, 16)
-        Icon.Image = "rbxassetid://6511490623"
-        Icon.ImageRectOffset = Vector2.new(144, 16)
-        Icon.ImageRectSize = Vector2.new(16, 16)
-        Icon.ScaleType = Enum.ScaleType.Crop
+        Icon.Position           = UDim2.new(0, 2, 0, 2)
+        Icon.Size               = UDim2.new(0, 16, 0, 16)
+        Icon.Image              = "rbxassetid://6511490623"
+        Icon.ImageRectOffset    = Vector2.new(144, 16)
+        Icon.ImageRectSize      = Vector2.new(16, 16)
+        Icon.ScaleType          = Enum.ScaleType.Crop
 
-        Icon_2.Name = "Icon"
-        Icon_2.Parent = Indent
-        Icon_2.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        Icon_2.Name               = "Icon"
+        Icon_2.Parent             = Indent
+        Icon_2.BackgroundColor3   = Color3.fromRGB(255, 255, 255)
         Icon_2.BackgroundTransparency = 1
-        Icon_2.Position = UDim2.new(0, 2, 0, 1)
-        Icon_2.Size = UDim2.new(0, 16, 0, 16)
-        Icon_2.ScaleType = Enum.ScaleType.Crop
+        Icon_2.Position           = UDim2.new(0, 2, 0, 1)
+        Icon_2.Size               = UDim2.new(0, 16, 0, 16)
+        Icon_2.ScaleType          = Enum.ScaleType.Crop
 
-        PlayersFrame.Name = "Players"
-        PlayersFrame.Parent = List
-        PlayersFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        PlayersFrame.Name               = "Players"
+        PlayersFrame.Parent             = List
+        PlayersFrame.BackgroundColor3   = Color3.fromRGB(255, 255, 255)
         PlayersFrame.BackgroundTransparency = 1
-        PlayersFrame.BorderColor3 = Color3.fromRGB(0, 0, 0)
-        PlayersFrame.BorderSizePixel = 0
-        PlayersFrame.Position = UDim2.new(0, 0, 0.0416795851, 0)
-        PlayersFrame.Size = UDim2.new(0, 205, 0, 367)
-        PlayersFrame.Visible = false
+        PlayersFrame.BorderColor3       = Color3.fromRGB(0, 0, 0)
+        PlayersFrame.BorderSizePixel    = 0
+        PlayersFrame.Position           = UDim2.new(0, 0, 0.0416795851, 0)
+        PlayersFrame.Size               = UDim2.new(0, 205, 0, 367)
+        PlayersFrame.Visible            = false
 
-        UIListLayout.Parent = PlayersFrame
+        UIListLayout.Parent    = PlayersFrame
         UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
-        PlaceHolderEntry.Name = "PlaceHolderEntry"
-        PlaceHolderEntry.Parent = List
-        PlaceHolderEntry.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+        PlaceHolderEntry.Name               = "PlaceHolderEntry"
+        PlaceHolderEntry.Parent             = List
+        PlaceHolderEntry.BackgroundColor3   = Color3.fromRGB(0, 0, 0)
         PlaceHolderEntry.BackgroundTransparency = 1
-        PlaceHolderEntry.BorderColor3 = Color3.fromRGB(0, 0, 0)
-        PlaceHolderEntry.Position = UDim2.new(0, 0, 0, 20)
-        PlaceHolderEntry.Size = UDim2.new(0, 205, 0, 20)
-        PlaceHolderEntry.Visible = false
-        PlaceHolderEntry.AutoButtonColor = false
-        PlaceHolderEntry.Font = Enum.Font.SourceSans
-        PlaceHolderEntry.Text = ""
-        PlaceHolderEntry.TextSize = 14
+        PlaceHolderEntry.BorderColor3       = Color3.fromRGB(0, 0, 0)
+        PlaceHolderEntry.Position           = UDim2.new(0, 0, 0, 20)
+        PlaceHolderEntry.Size               = UDim2.new(0, 205, 0, 20)
+        PlaceHolderEntry.Visible            = false
+        PlaceHolderEntry.AutoButtonColor    = false
+        PlaceHolderEntry.Font               = Enum.Font.SourceSans
+        PlaceHolderEntry.Text               = ""
+        PlaceHolderEntry.TextSize           = 14
 
-        Indent_2.Name = "Indent"
-        Indent_2.Parent = PlaceHolderEntry
-        Indent_2.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        Indent_2.Name               = "Indent"
+        Indent_2.Parent             = PlaceHolderEntry
+        Indent_2.BackgroundColor3   = Color3.fromRGB(60, 60, 60)
         Indent_2.BackgroundTransparency = 1
-        Indent_2.BorderColor3 = Color3.fromRGB(86, 125, 188)
-        Indent_2.BorderSizePixel = 0
-        Indent_2.Position = UDim2.new(0, 40, 0, 0)
-        Indent_2.Size = UDim2.new(1, -40, 1, 0)
+        Indent_2.BorderColor3       = Color3.fromRGB(86, 125, 188)
+        Indent_2.BorderSizePixel    = 0
+        Indent_2.Position           = UDim2.new(0, 40, 0, 0)
+        Indent_2.Size               = UDim2.new(1, -40, 1, 0)
 
-        EntryName_2.Name = "EntryName"
-        EntryName_2.Parent = Indent_2
-        EntryName_2.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        EntryName_2.Name               = "EntryName"
+        EntryName_2.Parent             = Indent_2
+        EntryName_2.BackgroundColor3   = Color3.fromRGB(255, 255, 255)
         EntryName_2.BackgroundTransparency = 1
-        EntryName_2.Position = UDim2.new(0, 26, 0, 0)
-        EntryName_2.Size = UDim2.new(1, -26, 1, 0)
-        EntryName_2.Font = Enum.Font.SourceSans
-        EntryName_2.Text = "Camera"
-        EntryName_2.TextColor3 = Color3.fromRGB(220, 220, 220)
-        EntryName_2.TextSize = 14
-        EntryName_2.TextXAlignment = Enum.TextXAlignment.Left
+        EntryName_2.Position           = UDim2.new(0, 26, 0, 0)
+        EntryName_2.Size               = UDim2.new(1, -26, 1, 0)
+        EntryName_2.Font               = Enum.Font.SourceSans
+        EntryName_2.Text               = "Camera"
+        EntryName_2.TextColor3         = Color3.fromRGB(220, 220, 220)
+        EntryName_2.TextSize           = 14
+        EntryName_2.TextXAlignment     = Enum.TextXAlignment.Left
 
-        Expand_2.Name = "Expand"
-        Expand_2.Parent = Indent_2
-        Expand_2.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        Expand_2.Name               = "Expand"
+        Expand_2.Parent             = Indent_2
+        Expand_2.BackgroundColor3   = Color3.fromRGB(255, 255, 255)
         Expand_2.BackgroundTransparency = 1
-        Expand_2.ClipsDescendants = true
-        Expand_2.Position = UDim2.new(0, -20, 0, 0)
-        Expand_2.Size = UDim2.new(0, 20, 0, 20)
-        Expand_2.Font = Enum.Font.SourceSans
-        Expand_2.Text = ""
-        Expand_2.TextSize = 14
+        Expand_2.ClipsDescendants   = true
+        Expand_2.Position           = UDim2.new(0, -20, 0, 0)
+        Expand_2.Size               = UDim2.new(0, 20, 0, 20)
+        Expand_2.Font               = Enum.Font.SourceSans
+        Expand_2.Text               = ""
+        Expand_2.TextSize           = 14
 
-        Icon_3.Name = "Icon"
-        Icon_3.Parent = Indent_2
-        Icon_3.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        Icon_3.Name               = "Icon"
+        Icon_3.Parent             = Indent_2
+        Icon_3.BackgroundColor3   = Color3.fromRGB(255, 255, 255)
         Icon_3.BackgroundTransparency = 1
-        Icon_3.Position = UDim2.new(0, 2, 0, 1)
-        Icon_3.Size = UDim2.new(0, 16, 0, 16)
-        Icon_3.ScaleType = Enum.ScaleType.Crop
+        Icon_3.Position           = UDim2.new(0, 2, 0, 1)
+        Icon_3.Size               = UDim2.new(0, 16, 0, 16)
+        Icon_3.ScaleType          = Enum.ScaleType.Crop
 
-        -- ============================================
-        -- LÓGICA (mantida do Editor original)
-        -- ============================================
-        local Players = game:GetService("Players")
-        local LocalPlayer = Players.LocalPlayer
-        local playerButtons = {}
-        local isListVisible = false
-        local selectedBtn = nil
+        -- ── Lógica do Packages (arquivo 2) ───────────────────────────────
+        local Players       = game:GetService("Players")
+        local ListedPlayers = {}
 
-        -- Helper de cor de seleção (igual ao Packages)
         local selectionColor = Color3.fromRGB(13, 104, 202)
         local function setEntryColor(entry)
             for _, ent in pairs(List:GetDescendants()) do
                 if ent:IsA("Frame") and ent.BackgroundColor3 == selectionColor then
-                    ent.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                    ent.BackgroundColor3    = Color3.fromRGB(255, 255, 255)
                     ent.BackgroundTransparency = 1
                 end
             end
             if entry:IsA("TextButton") and entry:FindFirstChild("Indent") then
-                entry.Indent.BackgroundColor3 = selectionColor
+                entry.Indent.BackgroundColor3    = selectionColor
                 entry.Indent.BackgroundTransparency = 0
             end
         end
 
-        -- Toggle do PlayerData (expand/collapse)
-        PlayerData.MouseButton1Down:Connect(function()
-            setEntryColor(PlayerData)
-        end)
-        Expand.MouseButton1Down:Connect(function()
-            if PlayersFrame.Visible then
-                PlayersFrame.Visible = false
-                Expand.Rotation = 0
-            else
-                PlayersFrame.Visible = true
-                Expand.Rotation = 90
-            end
-        end)
-
-        -- ============================================
-        -- JANELA DE EDIÇÃO (abre ao clicar num player)
-        -- baseada no layout LMG2L, dentro do Dex Window
-        -- ============================================
-        local editWindow = nil
-        local ListedPlayers = {}
-
-        local function openEditWindow(playerName)
-            -- Fecha janela anterior se existir
-            if editWindow then
-                editWindow:Close()
-                editWindow = nil
-            end
-
-            local target = Players:FindFirstChild(playerName)
-            if not target then return end
-
-            -- ── Detecta tudo dentro do player ────────────────────
-            -- Prioridade: Folder "Inventory" > qualquer Folder > ValueBase direto
-            local valueObj   = nil   -- ValueBase encontrado (se não for inventário)
-            local valueType  = nil   -- "inventory" | ClassName do ValueBase | nil
-            local inventory  = nil   -- Folder/Model de itens
-            local valuesList = {}    -- lista de {name, className, value} para o textbox
-
-            -- 1. Pasta chamada "Inventory" explícita
-            local invFolder = target:FindFirstChild("Inventory")
-            if invFolder and (invFolder:IsA("Folder") or invFolder:IsA("Model")) then
-                inventory = invFolder
-                valueType = "inventory"
-            else
-                -- 2. Qualquer Folder/Model filho
-                local folder = target:FindFirstChildWhichIsA("Folder")
-                            or target:FindFirstChildWhichIsA("Model")
-                if folder then
-                    inventory = folder
-                    valueType = "inventory"
-                else
-                    -- 3. ValueBase direto no player (StringValue, BoolValue, IntValue…)
-                    local found = target:FindFirstChildWhichIsA("ValueBase")
-                    if found then
-                        valueObj  = found
-                        valueType = found.ClassName
-                    end
-                end
-            end
-
-            -- ── Monta o texto do TextBox e a linha de info ────────
-            local initialText = ""
-            local infoText    = ""
-
-            if valueType == "inventory" and inventory then
-                -- Coleta filhos: mostra nome + ClassName (e value se for ValueBase)
-                local parts = {}
-                for _, child in ipairs(inventory:GetChildren()) do
-                    if child:IsA("ValueBase") then
-                        table.insert(parts, '"' .. child.Name .. ':' .. tostring(child.Value) .. '"')
-                    else
-                        table.insert(parts, '"' .. child.Name .. '"')
-                    end
-                    table.insert(valuesList, {
-                        name      = child.Name,
-                        className = child.ClassName,
-                        value     = child:IsA("ValueBase") and tostring(child.Value) or nil,
-                        obj       = child,
-                    })
-                end
-                initialText = '{"Inventory":[' .. table.concat(parts, ",") .. "]}"
-                infoText    = inventory.ClassName .. " · " .. inventory.Name
-                              .. " (" .. #valuesList .. " items)"
-            elseif valueObj then
-                initialText = tostring(valueObj.Value)
-                infoText    = valueObj.ClassName .. " · " .. valueObj.Name
-            else
-                initialText = ""
-                infoText    = ""
-            end
-
-            -- ── Cria a Window do Dex ──────────────────────────────
-            -- Tamanho: header do Dex (20px) + bodyFrame (116px) = 136 de conteúdo
-            editWindow = Lib.Window.new()
-            editWindow:SetTitle("Edit Value")
-            editWindow:Resize(248, 145)   -- altura extra pra Save/Cancel não serem cortados
-            Editor.EditWindow = editWindow
-
-            local eContent = editWindow.GuiElems.Content
-
-            -- ── Frame_3 do LMG2L: fundo escuro que ocupa tudo ────
-            local bodyFrame = Instance.new("Frame")
-            bodyFrame.Name             = "Frame_3"
-            bodyFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
-            bodyFrame.BorderSizePixel  = 0
-            bodyFrame.Size             = UDim2.new(1, 0, 1, 0)
-            bodyFrame.Position         = UDim2.new(0, 0, 0, 0)
-            bodyFrame.Parent           = eContent
-
-            -- ── Label de info (tipo/nome) — substituindo TextLabel_8 ──
-            -- TextLabel_8 era o "Edit Value" na barra de título do LMG2L;
-            -- como o Dex já tem header, usamos ele aqui como info do objeto
-            local infoLabel = Instance.new("TextLabel")
-            infoLabel.Name                  = "InfoLabel"
-            infoLabel.BackgroundTransparency = 1
-            infoLabel.BorderSizePixel        = 0
-            infoLabel.TextSize               = 12
-            infoLabel.FontFace               = Font.new(
-                [[rbxasset://fonts/families/SourceSansPro.json]],
-                Enum.FontWeight.Regular,
-                Enum.FontStyle.Normal
-            )
-            infoLabel.TextColor3    = Color3.fromRGB(160, 160, 160)
-            infoLabel.TextXAlignment = Enum.TextXAlignment.Left
-            infoLabel.Size           = UDim2.new(1, -8, 0, 14)
-            infoLabel.Position       = UDim2.new(0, 4, 0, 4)
-            infoLabel.Text           = infoText
-            infoLabel.TextTruncate   = Enum.TextTruncate.AtEnd
-            infoLabel.Parent         = bodyFrame
-
-            -- ── TextLabel "Value:" — TextLabel_5 do LMG2L ────────
-            local valueLabel = Instance.new("TextLabel")
-            valueLabel.Name                  = "TextLabel_5"
-            valueLabel.BackgroundTransparency = 1
-            valueLabel.BorderSizePixel        = 0
-            valueLabel.TextSize               = 15
-            valueLabel.FontFace               = Font.new(
-                [[rbxasset://fonts/families/SourceSansPro.json]],
-                Enum.FontWeight.Regular,
-                Enum.FontStyle.Normal
-            )
-            valueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-            valueLabel.Size       = UDim2.new(0, 50, 0, 24)
-            valueLabel.Position   = UDim2.new(0, 0, 0, 32)
-            valueLabel.Text       = "Value:"
-            valueLabel.Parent     = bodyFrame
-
-            -- ── TextBox do valor — TextBox_4 do LMG2L ────────────
-            local valueBox = Instance.new("TextBox")
-            valueBox.Name             = "TextBox_4"
-            valueBox.BackgroundColor3 = Color3.fromRGB(38, 38, 38)
-            valueBox.BorderSizePixel  = 0
-            valueBox.TextXAlignment   = Enum.TextXAlignment.Left
-            valueBox.TextWrapped      = true
-            valueBox.TextSize         = 14
-            valueBox.TextColor3       = Color3.fromRGB(255, 255, 255)
-            valueBox.RichText         = false
-            valueBox.ClipsDescendants = true
-            valueBox.FontFace         = Font.new(
-                [[rbxasset://fonts/families/SourceSansPro.json]],
-                Enum.FontWeight.Regular,
-                Enum.FontStyle.Normal
-            )
-            valueBox.Size     = UDim2.new(0, 186, 0, 18)
-            valueBox.Position = UDim2.new(0, 54, 0, 34)
-            valueBox.Text     = initialText
-            valueBox.Parent   = bodyFrame
-
-            -- ── TextButton "Save" — TextButton_6 do LMG2L ────────
-            local saveBtn = Instance.new("TextButton")
-            saveBtn.Name             = "TextButton_6"
-            saveBtn.BackgroundColor3 = Color3.fromRGB(69, 69, 69)
-            saveBtn.BorderSizePixel  = 0
-            saveBtn.TextSize         = 15
-            saveBtn.TextColor3       = Color3.fromRGB(150, 150, 150)
-            saveBtn.FontFace         = Font.new(
-                [[rbxasset://fonts/families/SourceSansPro.json]],
-                Enum.FontWeight.Regular,
-                Enum.FontStyle.Normal
-            )
-            saveBtn.Size     = UDim2.new(0, 110, 0, 22)
-            saveBtn.Position = UDim2.new(0, 8, 0, 90)
-            saveBtn.Text     = "Save"
-            saveBtn.Parent   = bodyFrame
-
-            -- ── TextButton "Cancel" — TextButton_7 do LMG2L ──────
-            local cancelBtn = Instance.new("TextButton")
-            cancelBtn.Name             = "TextButton_7"
-            cancelBtn.BackgroundColor3 = Color3.fromRGB(69, 69, 69)
-            cancelBtn.BorderSizePixel  = 0
-            cancelBtn.TextSize         = 15
-            cancelBtn.TextColor3       = Color3.fromRGB(210, 210, 210)
-            cancelBtn.FontFace         = Font.new(
-                [[rbxasset://fonts/families/SourceSansPro.json]],
-                Enum.FontWeight.Regular,
-                Enum.FontStyle.Normal
-            )
-            cancelBtn.Size     = UDim2.new(0, 110, 0, 22)
-            cancelBtn.Position = UDim2.new(0, 130, 0, 90)
-            cancelBtn.Text     = "Cancel"
-            cancelBtn.Parent   = bodyFrame
-
-            -- ── Lógica do Save ────────────────────────────────────
-            saveBtn.MouseButton1Click:Connect(function()
-                local raw = valueBox.Text
-
-                if valueType == "inventory" and inventory then
-                    -- Tenta extrair items do JSON: {"Inventory":["a","b"]} ou ["a","b"]
-                    local inner = raw:match('"Inventory"%s*:%s*%[(.-)%]')
-                                or raw:match("%[(.-)%]")
-                                or raw
-                    -- Destrói filhos antigos
-                    for _, child in ipairs(inventory:GetChildren()) do
-                        child:Destroy()
-                    end
-                    -- Recria como StringValues (um por item entre aspas)
-                    local found = false
-                    for item in inner:gmatch('"([^"]*)"') do
-                        -- Ignora o par nome:valor (ex: "item:10") — usa só o nome
-                        local itemName = item:match("^([^:]+)") or item
-                        if itemName ~= "" then
-                            local sv = Instance.new("StringValue")
-                            sv.Name   = itemName
-                            sv.Parent = inventory
-                            found = true
-                        end
-                    end
-                    -- Fallback sem aspas: separado por vírgula
-                    if not found then
-                        for item in inner:gmatch("[^,]+") do
-                            item = item:match("^%s*(.-)%s*$")
-                            if item ~= "" then
-                                local sv = Instance.new("StringValue")
-                                sv.Name   = item
-                                sv.Parent = inventory
-                            end
-                        end
-                    end
-
-                elseif valueObj then
-                    -- Aplica conversão correta por tipo
-                    if valueType == "BoolValue" then
-                        valueObj.Value = (raw:lower() == "true" or raw == "1")
-                    elseif valueType == "IntValue" then
-                        valueObj.Value = math.floor(tonumber(raw) or valueObj.Value)
-                    elseif valueType == "NumberValue"
-                        or valueType == "DoubleConstrainedValue"
-                        or valueType == "IntConstrainedValue" then
-                        valueObj.Value = tonumber(raw) or valueObj.Value
-                    elseif valueType == "Color3Value" then
-                        -- Formato esperado: "R, G, B" (0–255)
-                        local r, g, b = raw:match("(%d+)%s*,%s*(%d+)%s*,%s*(%d+)")
-                        if r then
-                            valueObj.Value = Color3.fromRGB(
-                                tonumber(r), tonumber(g), tonumber(b)
-                            )
-                        end
-                    elseif valueType == "Vector3Value" then
-                        -- Formato esperado: "X, Y, Z"
-                        local x, y, z = raw:match("([%-%.%d]+)%s*,%s*([%-%.%d]+)%s*,%s*([%-%.%d]+)")
-                        if x then
-                            valueObj.Value = Vector3.new(
-                                tonumber(x), tonumber(y), tonumber(z)
-                            )
-                        end
-                    elseif valueType == "Vector2Value" then
-                        local x, y = raw:match("([%-%.%d]+)%s*,%s*([%-%.%d]+)")
-                        if x then
-                            valueObj.Value = Vector2.new(tonumber(x), tonumber(y))
-                        end
-                    elseif valueType == "CFrameValue" then
-                        -- Formato: "X,Y,Z, R00,R01,R02, R10,R11,R12, R20,R21,R22"
-                        local nums = {}
-                        for n in raw:gmatch("[%-%.%d]+") do
-                            table.insert(nums, tonumber(n))
-                        end
-                        if #nums >= 12 then
-                            valueObj.Value = CFrame.new(
-                                nums[1],nums[2],nums[3],
-                                nums[4],nums[5],nums[6],
-                                nums[7],nums[8],nums[9],
-                                nums[10],nums[11],nums[12]
-                            )
-                        elseif #nums >= 3 then
-                            valueObj.Value = CFrame.new(nums[1], nums[2], nums[3])
-                        end
-                    elseif valueType == "BrickColorValue" then
-                        valueObj.Value = BrickColor.new(raw)
-                    elseif valueType == "RayValue" then
-                        -- Ray não é editável via texto simples; ignora
-                    else
-                        -- StringValue e qualquer outro
-                        valueObj.Value = raw
-                    end
-                end
-
-                editWindow:Close()
-                editWindow = nil
-            end)
-
-            -- ── Lógica do Cancel ──────────────────────────────────
-            cancelBtn.MouseButton1Click:Connect(function()
-                editWindow:Close()
-                editWindow = nil
-            end)
-
-            editWindow:Show()
-        end
-
-        -- ============================================
-        -- LÓGICA DE PLAYERS (estilo Packages - arquivo 2)
-        -- ============================================
         local SimpleHash = function(tbl)
             local str = ""
             for k, v in pairs(tbl) do
@@ -596,45 +395,59 @@ local function main()
             return tostring(str):sub(1, 32)
         end
 
-        local hash = SimpleHash(ListedPlayers)
+        -- Toggle expand/collapse
+        PlayerData.MouseButton1Down:Connect(function()
+            setEntryColor(PlayerData)
+        end)
+        Expand.MouseButton1Down:Connect(function()
+            if PlayersFrame.Visible then
+                PlayersFrame.Visible = false
+                Expand.Rotation      = 0
+            else
+                PlayersFrame.Visible = true
+                Expand.Rotation      = 90
+            end
+        end)
 
+        -- Tracking de players
         Players.PlayerRemoving:Connect(function(plr)
-            if not table.find(ListedPlayers, plr.Name) then return end
-            table.remove(ListedPlayers, table.find(ListedPlayers, plr.Name))
+            local idx = table.find(ListedPlayers, plr.Name)
+            if idx then table.remove(ListedPlayers, idx) end
         end)
         Players.PlayerAdded:Connect(function(plr)
-            if table.find(ListedPlayers, plr.Name) then return end
-            table.insert(ListedPlayers, plr.Name)
+            if not table.find(ListedPlayers, plr.Name) then
+                table.insert(ListedPlayers, plr.Name)
+            end
         end)
-
         for _, plr in pairs(Players:GetPlayers()) do
             if not table.find(ListedPlayers, plr.Name) then
                 table.insert(ListedPlayers, plr.Name)
             end
         end
 
+        local hash = SimpleHash(ListedPlayers)
+
         game:GetService("RunService").Heartbeat:Connect(function()
             if SimpleHash(ListedPlayers) == hash then return end
             hash = SimpleHash(ListedPlayers)
 
             for _, frames in pairs(PlayersFrame:GetDescendants()) do
-                if frames.Name == "EntryFrameData" then
-                    frames:Destroy()
-                end
+                if frames.Name == "EntryFrameData" then frames:Destroy() end
             end
 
             for _, plrName in pairs(ListedPlayers) do
                 local new = PlaceHolderEntry:Clone()
-                new.Name = "EntryFrameData"
-                new.Visible = true
-                new.Parent = PlayersFrame
-                new.Indent.EntryName.Text = plrName
+                new.Name                    = "EntryFrameData"
+                new.Visible                 = true
+                new.Parent                  = PlayersFrame
+                new.Indent.EntryName.Text   = plrName
+
                 new.MouseButton1Down:Connect(function()
                     if new:IsA("TextButton") and new:FindFirstChild("Indent") then
                         if new.Indent.BackgroundColor3 == selectionColor then
-                            local ok, err = pcall(openEditWindow, plrName)
-                            if not ok then
-                                warn("[Editor] openEditWindow erro para " .. plrName .. ": " .. tostring(err))
+                            local target = Players:FindFirstChild(plrName)
+                            if target then
+                                DisplayValueEditor(target)
                             end
                         end
                     end
