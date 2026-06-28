@@ -215,7 +215,7 @@ local function main()
         window:Resize(205, 530)
         Editor.Window = window
 
-        local content = window.GuiElems.Content
+        local content = window.GuiElems.Main.Content
 
         -- ── GUI do Packages (arquivo 2) ───────────────────────────────────
         local List             = Instance.new("Frame")
@@ -283,6 +283,7 @@ local function main()
         Expand.Font               = Enum.Font.SourceSans
         Expand.Text               = ""
         Expand.TextSize           = 14
+        Expand.Rotation           = 90
 
         Icon.Name               = "Icon"
         Icon.Parent             = Expand
@@ -311,7 +312,7 @@ local function main()
         PlayersFrame.BorderSizePixel    = 0
         PlayersFrame.Position           = UDim2.new(0, 0, 0.0416795851, 0)
         PlayersFrame.Size               = UDim2.new(0, 205, 0, 367)
-        PlayersFrame.Visible            = false
+        PlayersFrame.Visible            = true
 
         UIListLayout.Parent    = PlayersFrame
         UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -369,83 +370,104 @@ local function main()
         Icon_3.Size               = UDim2.new(0, 16, 0, 16)
         Icon_3.ScaleType          = Enum.ScaleType.Crop
 
-        -- ── Lógica do Packages (arquivo 2) ───────────────────────────────
+        -- ── Lógica do Packages (cópia fiel do arquivo 2) ──────────────────
         local Players       = game:GetService("Players")
         local ListedPlayers = {}
 
-        local selectionColor = Color3.fromRGB(13, 104, 202)
-        local function setEntryColor(entry)
-            for _, ent in pairs(List:GetDescendants()) do
-                if ent:IsA("Frame") and ent.BackgroundColor3 == selectionColor then
-                    ent.BackgroundColor3    = Color3.fromRGB(255, 255, 255)
-                    ent.BackgroundTransparency = 1
+        -- Referencia filhos pelo nome, igual ao original
+        local PlayersFrame     = List:FindFirstChild("Players")
+        local PlaceHolderEntry = List:FindFirstChild("PlaceHolderEntry")
+        local PlayerDataButton = List:FindFirstChild("PlayerData")
+
+        local SimpleHash = function(tbl)
+            local str = ""
+            for k,v in pairs(tbl) do
+                str = str .. tostring(k) .. tostring(v)
+            end
+            return tostring(str):sub(1,32)
+        end
+
+        local SetEntryColor = function(entry)
+            local color = Color3.fromRGB(13, 104, 202)
+            for i,ent in pairs(List:GetDescendants()) do
+                if ent:IsA("Frame") then
+                    if ent.BackgroundColor3 == color then
+                        ent.BackgroundColor3 = Color3.fromRGB(255,255,255)
+                        ent.BackgroundTransparency = 1
+                    end
                 end
             end
-            if entry:IsA("TextButton") and entry:FindFirstChild("Indent") then
-                entry.Indent.BackgroundColor3    = selectionColor
-                entry.Indent.BackgroundTransparency = 0
+            if entry:IsA("TextButton") then
+                if entry:FindFirstChild("Indent") then
+                    entry.Indent.BackgroundColor3 = color
+                    entry.Indent.BackgroundTransparency = 0
+                end
             end
         end
 
-        -- Toggle expand/collapse
-        PlayerData.MouseButton1Down:Connect(function()
-            setEntryColor(PlayerData)
+        PlayerDataButton.MouseButton1Down:Connect(function()
+            SetEntryColor(PlayerDataButton)
         end)
-        Expand.MouseButton1Down:Connect(function()
+
+        local hash = SimpleHash(ListedPlayers)
+
+        PlayerDataButton.Indent.Expand.MouseButton1Down:Connect(function()
             if PlayersFrame.Visible then
                 PlayersFrame.Visible = false
-                Expand.Rotation      = 0
+                PlayerDataButton.Indent.Expand.Rotation = 0
             else
                 PlayersFrame.Visible = true
-                Expand.Rotation      = 90
+                PlayerDataButton.Indent.Expand.Rotation = 90
             end
         end)
 
-        -- Rebuild da lista de entries
-        local function rebuildEntries()
-            for _, frames in pairs(PlayersFrame:GetDescendants()) do
-                if frames.Name == "EntryFrameData" then frames:Destroy() end
-            end
-            for _, plrName in pairs(ListedPlayers) do
-                local new = PlaceHolderEntry:Clone()
-                new.Name                  = "EntryFrameData"
-                new.Visible               = true
-                new.Parent                = PlayersFrame
-                new.Indent.EntryName.Text = plrName
-                new.MouseButton1Down:Connect(function()
-                    if new:IsA("TextButton") and new:FindFirstChild("Indent") then
-                        if new.Indent.BackgroundColor3 == selectionColor then
-                            local target = Players:FindFirstChild(plrName)
-                            if target then DisplayValueEditor(target) end
-                        end
-                    end
-                    setEntryColor(new)
-                end)
-            end
-        end
-
-        -- Tracking de players
         Players.PlayerRemoving:Connect(function(plr)
-            local idx = table.find(ListedPlayers, plr.Name)
-            if idx then
-                table.remove(ListedPlayers, idx)
-                rebuildEntries()
-            end
+            if not table.find(ListedPlayers, plr.Name) then return end
+            table.remove(ListedPlayers, table.find(ListedPlayers, plr.Name))
         end)
         Players.PlayerAdded:Connect(function(plr)
-            if not table.find(ListedPlayers, plr.Name) then
-                table.insert(ListedPlayers, plr.Name)
-                rebuildEntries()
-            end
+            if table.find(ListedPlayers, plr.Name) then return end
+            table.insert(ListedPlayers, plr.Name)
         end)
-        for _, plr in pairs(Players:GetPlayers()) do
+
+        for i,plr in pairs(Players:GetPlayers()) do
             if not table.find(ListedPlayers, plr.Name) then
                 table.insert(ListedPlayers, plr.Name)
             end
         end
 
-        -- Popula imediatamente na abertura
-        rebuildEntries()
+        -- Força hash diferente para o Heartbeat disparar imediatamente
+        hash = ""
+
+        game:GetService("RunService").Heartbeat:Connect(function(delta)
+            if SimpleHash(ListedPlayers) == hash then return end
+            hash = SimpleHash(ListedPlayers)
+
+            for i,frames in pairs(PlayersFrame:GetDescendants()) do
+                if frames.Name == "EntryFrameData" then
+                    frames:Destroy()
+                end
+            end
+
+            for i,plr in pairs(ListedPlayers) do
+                local new = PlaceHolderEntry:Clone()
+                new.Name = "EntryFrameData"
+                new.Visible = true
+                new.Parent = PlayersFrame
+                new.Indent.EntryName.Text = plr
+                new.MouseButton1Down:Connect(function()
+                    if new:IsA("TextButton") then
+                        if new:FindFirstChild("Indent") then
+                            if new.Indent.BackgroundColor3 == Color3.fromRGB(13, 104, 202) then
+                                local target = Players:FindFirstChild(plr)
+                                if target then DisplayValueEditor(target) end
+                            end
+                        end
+                    end
+                    SetEntryColor(new)
+                end)
+            end
+        end)
     end
 
     return Editor
