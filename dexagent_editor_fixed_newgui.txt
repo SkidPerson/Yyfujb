@@ -15788,6 +15788,8 @@ Main = (function()
 
 		Main.CreateApp({Name = "Properties", IconMap = Main.LargeIcons, Icon = "Properties", Open = true, Window = Properties.Window})
 
+		Main.CreateApp({Name = "Script Viewer", IconMap = Main.LargeIcons, Icon = "Script_Viewer", Window = ScriptViewer.Window})
+
 		Main.CreateApp({Name = "3D Viewer", IconMap = Main.LargeIcons, Icon = "Object", Window = ModelViewer.Window})
 		
 		Main.CreateApp({Name = "SS panel", IconMap = Main.LargeIcons, Icon = "Executor", Window = SecretServicePanel.Window})
